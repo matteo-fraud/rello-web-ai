@@ -2,6 +2,10 @@ import * as THREE from 'three'
 
 const SPEED = 9
 const TURN_LERP = 10
+const MOVE_BLEND_RATE = 7
+
+const GRAVITY = 9 // low-gravity, floaty jump arc to match the space aesthetic
+const JUMP_SPEED = 6.2
 
 const SKIN = 0xc9946a
 const SUIT = 0x1c2340
@@ -12,21 +16,35 @@ const GEM = 0xff5ad1
 const BOOM = 0x2a2f45
 const BOOM_LIGHT = 0x2ee6d6
 
-function limb(length, width, color) {
-  const pivot = new THREE.Group()
+// Hip/shoulder pivot -> upper segment -> knee/elbow joint -> lower segment,
+// so limbs can bend instead of swinging as one rigid rod.
+function twoSegmentLimb(upperLen, lowerLen, width, color) {
   const mat = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.7 })
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, length, width), mat)
-  mesh.position.y = -length / 2
-  pivot.add(mesh)
-  return pivot
+  const pivot = new THREE.Group()
+  const upperMesh = new THREE.Mesh(new THREE.BoxGeometry(width, upperLen, width), mat)
+  upperMesh.position.y = -upperLen / 2
+  pivot.add(upperMesh)
+
+  const joint = new THREE.Group()
+  joint.position.y = -upperLen
+  pivot.add(joint)
+
+  const lowerMesh = new THREE.Mesh(new THREE.BoxGeometry(width * 0.82, lowerLen, width * 0.82), mat)
+  lowerMesh.position.y = -lowerLen / 2
+  joint.add(lowerMesh)
+
+  return { pivot, joint, lowerLen }
 }
 
 export class Player {
   constructor() {
     this.facingAngle = 0
     this.moving = false
+    this.moveBlend = 0
     this.walkT = 0
-    this._footPhase = 0
+    this.velocityY = 0
+    this.airY = 0
+    this.grounded = true
     this.object = new THREE.Group()
     this._build()
   }
@@ -38,13 +56,16 @@ export class Player {
     this.object.add(hips)
     this.hips = hips
 
-    // torso — puffy space jacket
-    const torsoMat = new THREE.MeshStandardMaterial({ color: SUIT, flatShading: true, roughness: 0.7 })
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.58, 0.34), torsoMat)
-    torso.position.y = 0.32
+    // torso pivot — everything above the waist leans forward from here when moving
+    const torso = new THREE.Group()
     hips.add(torso)
+    this.torso = torso
 
-    // trim stripe
+    const torsoMat = new THREE.MeshStandardMaterial({ color: SUIT, flatShading: true, roughness: 0.7 })
+    const torsoMesh = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.58, 0.34), torsoMat)
+    torsoMesh.position.y = 0.32
+    torso.add(torsoMesh)
+
     const trimMat = new THREE.MeshStandardMaterial({
       color: SUIT_TRIM,
       emissive: SUIT_TRIM,
@@ -53,27 +74,26 @@ export class Player {
     })
     const trim = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.07, 0.36), trimMat)
     trim.position.y = 0.14
-    hips.add(trim)
+    torso.add(trim)
 
-    // gold chain + gem
     const chain = new THREE.Mesh(
       new THREE.TorusGeometry(0.16, 0.025, 6, 12),
       new THREE.MeshStandardMaterial({ color: GOLD, flatShading: true, metalness: 0.6, roughness: 0.35 })
     )
     chain.rotation.x = Math.PI / 2
     chain.position.set(0, 0.5, 0.17)
-    hips.add(chain)
+    torso.add(chain)
     const gem = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.06, 0),
       new THREE.MeshStandardMaterial({ color: GEM, emissive: GEM, emissiveIntensity: 0.9, flatShading: true })
     )
     gem.position.set(0, 0.4, 0.19)
-    hips.add(gem)
+    torso.add(gem)
 
     // head + helmet
     const head = new THREE.Group()
     head.position.y = 0.72
-    hips.add(head)
+    torso.add(head)
     const face = new THREE.Mesh(
       new THREE.BoxGeometry(0.26, 0.26, 0.26),
       new THREE.MeshStandardMaterial({ color: SKIN, flatShading: true, roughness: 0.8 })
@@ -102,7 +122,7 @@ export class Player {
     // boombox-jetpack on the back
     const jet = new THREE.Group()
     jet.position.set(0, 0.36, -0.24)
-    hips.add(jet)
+    torso.add(jet)
     const jetBody = new THREE.Mesh(
       new THREE.BoxGeometry(0.4, 0.42, 0.18),
       new THREE.MeshStandardMaterial({ color: BOOM, flatShading: true, roughness: 0.6 })
@@ -125,40 +145,46 @@ export class Player {
     jet.add(thruster)
     this.jetGroup = jet
 
-    // arms
-    this.leftArm = limb(0.34, 0.13, SUIT)
-    this.leftArm.position.set(0.33, 0.58, 0)
-    hips.add(this.leftArm)
-    this.rightArm = limb(0.34, 0.13, SUIT)
-    this.rightArm.position.set(-0.33, 0.58, 0)
-    hips.add(this.rightArm)
-
+    // arms — shoulder -> upper arm -> elbow -> forearm
     const gloveMat = new THREE.MeshStandardMaterial({ color: SUIT_TRIM, flatShading: true, roughness: 0.6 })
-    ;[this.leftArm, this.rightArm].forEach((arm) => {
-      const glove = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), gloveMat)
-      glove.position.y = -0.34
-      arm.children[0].add(glove)
+    const leftArmRig = twoSegmentLimb(0.19, 0.16, 0.13, SUIT)
+    leftArmRig.pivot.position.set(0.33, 0.58, 0)
+    torso.add(leftArmRig.pivot)
+    const rightArmRig = twoSegmentLimb(0.19, 0.16, 0.13, SUIT)
+    rightArmRig.pivot.position.set(-0.33, 0.58, 0)
+    torso.add(rightArmRig.pivot)
+    ;[leftArmRig, rightArmRig].forEach((rig) => {
+      const glove = new THREE.Mesh(new THREE.SphereGeometry(0.075, 6, 6), gloveMat)
+      glove.position.y = -rig.lowerLen
+      rig.joint.add(glove)
     })
+    this.leftArm = leftArmRig.pivot
+    this.leftElbow = leftArmRig.joint
+    this.rightArm = rightArmRig.pivot
+    this.rightElbow = rightArmRig.joint
 
-    // legs
-    this.leftLeg = limb(0.44, 0.16, SUIT)
-    this.leftLeg.position.set(0.15, 0, 0)
-    hips.add(this.leftLeg)
-    this.rightLeg = limb(0.44, 0.16, SUIT)
-    this.rightLeg.position.set(-0.15, 0, 0)
-    hips.add(this.rightLeg)
-
+    // legs — hip -> thigh -> knee -> shin
     const bootMat = new THREE.MeshStandardMaterial({
       color: 0x151a2e,
       emissive: SUIT_TRIM,
       emissiveIntensity: 0.4,
       flatShading: true,
     })
-    ;[this.leftLeg, this.rightLeg].forEach((leg) => {
+    const leftLegRig = twoSegmentLimb(0.24, 0.2, 0.16, SUIT)
+    leftLegRig.pivot.position.set(0.15, 0, 0)
+    hips.add(leftLegRig.pivot)
+    const rightLegRig = twoSegmentLimb(0.24, 0.2, 0.16, SUIT)
+    rightLegRig.pivot.position.set(-0.15, 0, 0)
+    hips.add(rightLegRig.pivot)
+    ;[leftLegRig, rightLegRig].forEach((rig) => {
       const boot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.28), bootMat)
-      boot.position.set(0, -0.4, 0.04)
-      leg.children[0].add(boot)
+      boot.position.set(0, -rig.lowerLen + 0.02, 0.04)
+      rig.joint.add(boot)
     })
+    this.leftLeg = leftLegRig.pivot
+    this.leftKnee = leftLegRig.joint
+    this.rightLeg = rightLegRig.pivot
+    this.rightKnee = rightLegRig.joint
 
     this.object.traverse((child) => {
       if (child.isMesh) {
@@ -172,8 +198,16 @@ export class Player {
     return this.object.position
   }
 
+  jump() {
+    if (this.grounded) {
+      this.velocityY = JUMP_SPEED
+      this.grounded = false
+    }
+  }
+
   update(dt, moveVec, groundY) {
     this.moving = moveVec.x !== 0 || moveVec.z !== 0
+    this.moveBlend += ((this.moving ? 1 : 0) - this.moveBlend) * Math.min(1, dt * MOVE_BLEND_RATE)
 
     if (this.moving) {
       this.object.position.x += moveVec.x * SPEED * dt
@@ -181,20 +215,46 @@ export class Player {
       const targetAngle = Math.atan2(moveVec.x, moveVec.z)
       let diff = ((targetAngle - this.facingAngle + Math.PI) % (Math.PI * 2)) - Math.PI
       this.facingAngle += diff * Math.min(1, dt * TURN_LERP)
-      this.walkT += dt * 9
+    }
+    this.walkT += dt * 9 * this.moveBlend
+
+    // vertical (jump) physics — low gravity, floaty arc
+    if (!this.grounded) {
+      this.velocityY -= GRAVITY * dt
+      this.airY += this.velocityY * dt
+      if (this.airY <= 0) {
+        this.airY = 0
+        this.velocityY = 0
+        this.grounded = true
+      }
     }
 
     this.object.rotation.y = this.facingAngle
-    this.object.position.y = groundY
+    this.object.position.y = groundY + this.airY
 
-    const swing = this.moving ? Math.sin(this.walkT) * 0.55 : 0
-    const swingOpp = this.moving ? Math.sin(this.walkT + Math.PI) * 0.55 : 0
-    this.leftLeg.rotation.x = swing
-    this.rightLeg.rotation.x = swingOpp
-    this.leftArm.rotation.x = swingOpp * 0.7
-    this.rightArm.rotation.x = swing * 0.7
+    const phaseL = this.walkT
+    const phaseR = this.walkT + Math.PI
+    const swingL = Math.sin(phaseL) * 0.55 * this.moveBlend
+    const swingR = Math.sin(phaseR) * 0.55 * this.moveBlend
+    this.leftLeg.rotation.x = swingL
+    this.rightLeg.rotation.x = swingR
+    this.leftKnee.rotation.x = Math.max(0, Math.sin(phaseL)) * 0.95 * this.moveBlend
+    this.rightKnee.rotation.x = Math.max(0, Math.sin(phaseR)) * 0.95 * this.moveBlend
 
-    const bob = this.moving ? Math.abs(Math.sin(this.walkT)) * 0.07 : Math.sin(performance.now() * 0.0015) * 0.02
+    this.leftArm.rotation.x = swingR * 0.7
+    this.rightArm.rotation.x = swingL * 0.7
+    this.leftElbow.rotation.x = 0.2 + Math.max(0, Math.sin(phaseR)) * 0.3 * this.moveBlend
+    this.rightElbow.rotation.x = 0.2 + Math.max(0, Math.sin(phaseL)) * 0.3 * this.moveBlend
+
+    if (!this.grounded) {
+      // tuck slightly while airborne
+      this.leftKnee.rotation.x = THREE.MathUtils.lerp(this.leftKnee.rotation.x, 0.5, 0.3)
+      this.rightKnee.rotation.x = THREE.MathUtils.lerp(this.rightKnee.rotation.x, 0.5, 0.3)
+    }
+
+    this.torso.rotation.x = -0.14 * this.moveBlend
+
+    const bob = this.moveBlend > 0.02 ? Math.abs(Math.sin(this.walkT)) * 0.07 * this.moveBlend : Math.sin(performance.now() * 0.0015) * 0.02
     this.hips.position.y = 0.86 + bob
 
     const pulse = 0.6 + Math.sin(performance.now() * 0.006) * 0.4
@@ -206,7 +266,7 @@ export class Player {
 
   // Returns true on frames where a footstep "lands" (for sfx/dust timing).
   footstepTick() {
-    if (!this.moving) return false
+    if (!this.moving || !this.grounded) return false
     const phase = this.walkT % (Math.PI * 2)
     if (this._lastPhase === undefined) this._lastPhase = phase
     const crossed = (this._lastPhase < Math.PI && phase >= Math.PI) || (this._lastPhase > phase && phase < 0.2)

@@ -125,6 +125,7 @@ export class Game {
     this.particles.update(dt)
 
     const interactPressed = this.input.consumeInteract()
+    const jumpPressed = this.input.consumeJump()
     const modalOpen = this.trackPanel.isOpen || this.aboutPanel.isOpen || this.tracklistPanel.isOpen
 
     this.records.forEach((r) => {
@@ -143,7 +144,7 @@ export class Game {
       this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + dy * MOUSE_SENSITIVITY, PITCH_MIN, PITCH_MAX)
 
       const fwd = { x: Math.sin(this.cameraYaw), z: Math.cos(this.cameraYaw) }
-      const right = { x: Math.cos(this.cameraYaw), z: -Math.sin(this.cameraYaw) }
+      const right = { x: -Math.cos(this.cameraYaw), z: Math.sin(this.cameraYaw) }
       let mx = 0
       let mz = 0
       if (this.input.forward) {
@@ -172,6 +173,7 @@ export class Game {
       const groundY = heightAt(this.player.object.position.x, this.player.object.position.z)
       this.player.update(dt, { x: mx, z: mz }, groundY)
       if (this.player.footstepTick()) this.sfx.footstep()
+      if (jumpPressed) this.player.jump()
 
       if (interactPressed) {
         if (campfireNear) {
@@ -213,6 +215,6 @@ export class Game {
 
   _onRecordUnearthed(record) {
     this.hud.setUnearthedCount(this._unearthedCount())
-    this.trackPanel.open(record.index)
+    this.trackPanel.playInBackground(record.index)
   }
 }

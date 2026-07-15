@@ -1,10 +1,10 @@
 import * as THREE from 'three'
 import { terrainHeight } from './terrain.js'
 
-const SKY_TOP = 0x140a2e
-const SKY_HORIZON = 0x4a2f6a
-const SAND_COLOR = 0x8a6a4a
-const FOG_COLOR = 0x2a1f4a
+const SKY_TOP = 0x8fd0f0
+const SKY_HORIZON = 0xf6cf8e
+const SAND_COLOR = 0xb08a5a
+const FOG_COLOR = 0xe7c493
 
 export function heightAt(x, z) {
   return terrainHeight(x, z)
@@ -12,33 +12,34 @@ export function heightAt(x, z) {
 
 export function buildScene(bounds) {
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(SKY_TOP)
-  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.012)
+  scene.background = new THREE.Color(SKY_HORIZON)
+  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.009)
 
-  const hemi = new THREE.HemisphereLight(0x8fa0ff, 0x3a2a1a, 0.45)
+  const hemi = new THREE.HemisphereLight(0xbfe4ff, 0x6a5530, 0.9)
   scene.add(hemi)
 
   // Low, grazing angle (roughly perpendicular to the dune ridge direction)
   // so windward/leeward faces read with real contrast, like raking desert
   // light — a light straight overhead makes dunes look completely flat.
-  const moonLight = new THREE.DirectionalLight(0xcfe0ff, 2.3)
-  moonLight.position.set(-52, 22, 145)
-  moonLight.castShadow = true
-  moonLight.shadow.mapSize.set(2048, 2048)
+  const sunLight = new THREE.DirectionalLight(0xfff2d2, 3.0)
+  sunLight.position.set(-52, 22, 145)
+  sunLight.castShadow = true
+  sunLight.shadow.mapSize.set(2048, 2048)
   const shadowSpan = Math.min(bounds * 1.1, 160)
-  moonLight.shadow.camera.left = -shadowSpan
-  moonLight.shadow.camera.right = shadowSpan
-  moonLight.shadow.camera.top = shadowSpan
-  moonLight.shadow.camera.bottom = -shadowSpan
-  moonLight.shadow.camera.near = 10
-  moonLight.shadow.camera.far = 260
-  moonLight.shadow.bias = -0.0015
-  scene.add(moonLight)
-  scene.add(moonLight.target)
+  sunLight.shadow.camera.left = -shadowSpan
+  sunLight.shadow.camera.right = shadowSpan
+  sunLight.shadow.camera.top = shadowSpan
+  sunLight.shadow.camera.bottom = -shadowSpan
+  sunLight.shadow.camera.near = 10
+  sunLight.shadow.camera.far = 260
+  sunLight.shadow.bias = -0.0015
+  scene.add(sunLight)
+  scene.add(sunLight.target)
 
-  const fillLight = new THREE.DirectionalLight(0xff9a6a, 0.5)
-  fillLight.position.set(30, 20, 40)
-  scene.add(fillLight)
+  // second, weaker sun — no shadow (keeps cost down), fills in and warms the scene
+  const sun2Light = new THREE.DirectionalLight(0xffb37a, 1.2)
+  sun2Light.position.set(30, 20, 40)
+  scene.add(sun2Light)
 
   const groundSize = bounds * 2.2
   const segments = 170
@@ -65,12 +66,13 @@ export function buildScene(bounds) {
   scene.add(ground)
 
   scene.add(buildSkyDome())
-  scene.add(buildStars())
+  scene.add(buildSun(-74, 31, 205, 22, 0xfff6d8))
+  scene.add(buildSun(100, 67, 134, 13, 0xffb877))
   scene.add(buildMoon(60, -30, -220, 34, 0xd8dce8))
   scene.add(buildMoon(-160, -10, -260, 20, 0xb9a8c9))
   scene.add(buildRingedPlanet(220, 40, -340, 46))
 
-  return { scene, ground, hemi, moonLight }
+  return { scene, ground, hemi, sunLight }
 }
 
 // A tileable grainy sand texture, generated on a canvas — gives the dunes
@@ -116,12 +118,12 @@ function buildSandTexture() {
 function buildSkyDome() {
   const geo = new THREE.SphereGeometry(480, 24, 16)
   const top = new THREE.Color(SKY_TOP)
-  const horizon = new THREE.Color(0x5a3a6a)
+  const horizon = new THREE.Color(SKY_HORIZON)
   const pos = geo.attributes.position
   const colors = new Float32Array(pos.count * 3)
   for (let i = 0; i < pos.count; i++) {
     const y = pos.getY(i)
-    const t = THREE.MathUtils.clamp((y + 120) / 300, 0, 1)
+    const t = THREE.MathUtils.clamp((y + 40) / 260, 0, 1)
     const c = horizon.clone().lerp(top, t)
     colors[i * 3] = c.r
     colors[i * 3 + 1] = c.g
@@ -134,24 +136,34 @@ function buildSkyDome() {
   return dome
 }
 
-function buildStars() {
-  const count = 1400
-  const positions = new Float32Array(count * 3)
-  for (let i = 0; i < count; i++) {
-    const r = 400 + Math.random() * 250
-    const theta = Math.random() * Math.PI * 2
-    const phi = Math.acos(Math.random() * 0.85) // keep mostly above horizon
-    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
-    positions[i * 3 + 1] = Math.abs(r * Math.cos(phi)) * 0.6 + 10
-    positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta)
-  }
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false })
-  const points = new THREE.Points(geo, mat)
-  points.matrixAutoUpdate = false
-  points.updateMatrix()
-  return points
+function buildGlowSprite(radius, color) {
+  const size = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const c = new THREE.Color(color)
+  const rgb = `${c.r * 255},${c.g * 255},${c.b * 255}`
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  grad.addColorStop(0, `rgba(${rgb},0.9)`)
+  grad.addColorStop(0.35, `rgba(${rgb},0.35)`)
+  grad.addColorStop(1, `rgba(${rgb},0)`)
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, size, size)
+  const texture = new THREE.CanvasTexture(canvas)
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
+  const sprite = new THREE.Sprite(mat)
+  sprite.scale.setScalar(radius * 7)
+  return sprite
+}
+
+function buildSun(x, y, z, radius, color) {
+  const group = new THREE.Group()
+  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 1), new THREE.MeshBasicMaterial({ color, fog: false }))
+  group.add(body)
+  group.add(buildGlowSprite(radius, color))
+  group.position.set(x, y, z)
+  return group
 }
 
 function buildMoon(x, y, z, radius, color) {

@@ -62,7 +62,7 @@ export class TrackPanel {
     return !this.panel.classList.contains('hidden')
   }
 
-  open(index, { autoplay = true } = {}) {
+  _loadTrack(index) {
     this.currentIndex = index
     const track = this.tracks[index]
     this.discEl.style.setProperty('--disc-color', track.color)
@@ -77,10 +77,22 @@ export class TrackPanel {
       this.audio.src = track.src
     }
     this.audio.currentTime = 0
+  }
+
+  // Opens the full player panel (used from the tracklist, or Prev/Next).
+  open(index, { autoplay = true } = {}) {
+    this._loadTrack(index)
     this.panel.classList.remove('hidden')
     if (autoplay) {
       this.audio.play().catch(() => {})
     }
+  }
+
+  // Starts a track playing without showing the panel — used when a record
+  // is dug up, so exploring the desert isn't interrupted by a popup.
+  playInBackground(index) {
+    this._loadTrack(index)
+    this.audio.play().catch(() => {})
   }
 
   step(delta) {

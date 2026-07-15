@@ -460,6 +460,13 @@ body {
   opacity: 0.6;
 }
 
+.tracklist-empty {
+  padding: 1.2rem 0.4rem;
+  opacity: 0.65;
+  font-style: italic;
+  text-align: center;
+}
+
 /* About panel */
 .about-tagline {
   font-style: italic;

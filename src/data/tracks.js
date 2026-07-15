@@ -12,7 +12,7 @@
 // playable out of the box — swap `src` for your real masters and the game
 // world doesn't need any other changes.
 export const album = {
-  title: 'Sandglass',
+  title: 'AFROBØØST',
   year: 2026,
 }
 

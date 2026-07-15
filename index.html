@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Sandglass — a music portfolio you walk through. Dig up buried vinyl records in a low-poly cosmic desert to hear each track." />
-    <title>Sandglass — RELLO</title>
+    <meta name="description" content="AFROBØØST — a music portfolio you walk through. Dig up buried vinyl records in a low-poly cosmic desert to hear each track." />
+    <title>AFROBØØST — RELLO</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -15,12 +15,12 @@
       <!-- Title / start screen (also doubles as the user-gesture that unlocks audio) -->
       <div id="title-screen">
         <div class="title-card">
-          <h1>Sandglass</h1>
+          <h1>AFROBØØST</h1>
           <p class="title-artist">a cosmic desert record by <strong>RELLO</strong></p>
-          <p class="title-blurb">Eight tracks are buried out there under two moons. Walk the dunes and dig them up.</p>
+          <p class="title-blurb">Eight tracks are buried out there under twin suns. Walk the dunes and dig them up.</p>
           <button id="start-btn" type="button">Enter the desert</button>
           <div class="title-controls">
-            <span class="kbd-hint desktop-only"><kbd>WASD</kbd> move &nbsp; mouse to look &nbsp; <kbd>E</kbd> / <kbd>Space</kbd> dig &amp; interact</span>
+            <span class="kbd-hint desktop-only"><kbd>WASD</kbd> move &nbsp; mouse to look &nbsp; <kbd>Space</kbd> jump &nbsp; <kbd>E</kbd> interact</span>
             <span class="kbd-hint touch-only">Use the on-screen buttons to walk, turn and dig</span>
           </div>
         </div>
@@ -29,7 +29,7 @@
       <!-- HUD -->
       <div id="hud" class="hidden">
         <div class="hud-left">
-          <span class="hud-album-title">Sandglass</span>
+          <span class="hud-album-title">AFROBØØST</span>
           <span class="hud-progress" id="hud-progress">0 / 8 unearthed</span>
         </div>
         <div class="hud-right">
@@ -41,7 +41,7 @@
 
       <!-- Bottom control hint -->
       <div id="controls-hint" class="hidden">
-        <span class="kbd-hint desktop-only"><kbd>WASD</kbd> move &nbsp;·&nbsp; click + mouse to look &nbsp;·&nbsp; <kbd>E</kbd> interact</span>
+        <span class="kbd-hint desktop-only"><kbd>WASD</kbd> move &nbsp;·&nbsp; click + mouse to look &nbsp;·&nbsp; <kbd>Space</kbd> jump &nbsp;·&nbsp; <kbd>E</kbd> interact</span>
       </div>
 
       <!-- Touch controls -->
@@ -83,8 +83,8 @@
         <div class="modal-backdrop" data-close="tracklist-panel"></div>
         <div class="modal-card">
           <button class="modal-close" type="button" data-close="tracklist-panel" aria-label="Close">✕</button>
-          <h2>Sandglass</h2>
-          <p class="modal-sub">Jump straight to a track, or go dig it up in the sand.</p>
+          <h2>AFROBØØST</h2>
+          <p class="modal-sub">Tracks you've dug up so far — go find the rest in the dunes.</p>
           <ol id="tracklist-list" class="tracklist"></ol>
         </div>
       </div>

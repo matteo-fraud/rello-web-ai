@@ -6,7 +6,7 @@ export const artist = {
   tagline: 'Beats buried under two moons, waiting to be dug up.',
   bio: `RELLO raps like the transmission is breaking up on purpose — chopped
 vocoder hooks, 808s that hit like re-entry, verses about drifting further
-from home than anyone meant to go. "Sandglass" is the debut record: eight
+from home than anyone meant to go. "AFROBØØST" is the debut record: eight
 tracks recorded somewhere between a crashed shuttle and a dead radio
 station, buried out here in the dunes for whoever finds them.`,
   photo: '', // optional: '/images/artist.jpg'

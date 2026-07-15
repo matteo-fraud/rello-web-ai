@@ -2,7 +2,8 @@ const FORWARD_KEYS = new Set(['ArrowUp', 'KeyW'])
 const BACK_KEYS = new Set(['ArrowDown', 'KeyS'])
 const STRAFE_LEFT_KEYS = new Set(['ArrowLeft', 'KeyA'])
 const STRAFE_RIGHT_KEYS = new Set(['ArrowRight', 'KeyD'])
-const INTERACT_KEYS = new Set(['KeyE', 'Space', 'Enter'])
+const INTERACT_KEYS = new Set(['KeyE', 'Enter'])
+const JUMP_KEYS = new Set(['Space'])
 
 // Desktop: WASD moves relative to the camera, the mouse looks around
 // (pointer-lock), like a console third-person game. Touch has no mouse, so
@@ -17,6 +18,7 @@ export class Input {
     this.turnLeft = false // touch-only
     this.turnRight = false // touch-only
     this.interactPressed = false // edge-triggered, consumed by Game each frame
+    this.jumpPressed = false // edge-triggered, consumed by Game each frame
     this.anyInputThisSession = false
     this.mouseDX = 0
     this.mouseDY = 0
@@ -29,6 +31,10 @@ export class Input {
       if (STRAFE_RIGHT_KEYS.has(e.code)) this.strafeRight = true
       if (INTERACT_KEYS.has(e.code)) {
         if (!e.repeat) this.interactPressed = true
+        e.preventDefault()
+      }
+      if (JUMP_KEYS.has(e.code)) {
+        if (!e.repeat) this.jumpPressed = true
         e.preventDefault()
       }
       this.anyInputThisSession = true
@@ -94,6 +100,13 @@ export class Input {
   consumeInteract() {
     const was = this.interactPressed
     this.interactPressed = false
+    return was
+  }
+
+  // Call once per frame after the game has read+acted on jumpPressed.
+  consumeJump() {
+    const was = this.jumpPressed
+    this.jumpPressed = false
     return was
   }
 
