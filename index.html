@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Sandglass — a music portfolio you walk through. Dig up buried vinyl records in a low-poly cosmic desert to hear each track." />
+    <title>Sandglass — RELLO</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Title / start screen (also doubles as the user-gesture that unlocks audio) -->
+      <div id="title-screen">
+        <div class="title-card">
+          <h1>Sandglass</h1>
+          <p class="title-artist">a cosmic desert record by <strong>RELLO</strong></p>
+          <p class="title-blurb">Eight tracks are buried out there under two moons. Walk the dunes and dig them up.</p>
+          <button id="start-btn" type="button">Enter the desert</button>
+          <div class="title-controls">
+            <span class="kbd-hint desktop-only"><kbd>W</kbd><kbd>S</kbd> walk &nbsp; <kbd>A</kbd><kbd>D</kbd> turn &nbsp; <kbd>E</kbd> / <kbd>Space</kbd> dig &amp; interact</span>
+            <span class="kbd-hint touch-only">Use the on-screen buttons to walk, turn and dig</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- HUD -->
+      <div id="hud" class="hidden">
+        <div class="hud-left">
+          <span class="hud-album-title">Sandglass</span>
+          <span class="hud-progress" id="hud-progress">0 / 8 unearthed</span>
+        </div>
+        <div class="hud-right">
+          <button id="mute-btn" class="hud-btn" type="button" aria-label="Toggle sound">🔊</button>
+          <button id="tracklist-btn" class="hud-btn" type="button">Tracklist</button>
+          <button id="about-btn" class="hud-btn" type="button">About</button>
+        </div>
+      </div>
+
+      <!-- Bottom control hint -->
+      <div id="controls-hint" class="hidden">
+        <span class="kbd-hint desktop-only"><kbd>W</kbd><kbd>S</kbd> walk &nbsp;·&nbsp; <kbd>A</kbd><kbd>D</kbd> turn &nbsp;·&nbsp; <kbd>E</kbd> interact</span>
+      </div>
+
+      <!-- Touch controls -->
+      <div id="touch-controls" class="hidden">
+        <div class="touch-dpad">
+          <button id="touch-left" class="touch-btn" aria-label="Turn left">◀</button>
+          <button id="touch-forward" class="touch-btn" aria-label="Walk forward">▲</button>
+          <button id="touch-right" class="touch-btn" aria-label="Turn right">▶</button>
+        </div>
+        <button id="touch-interact" class="touch-btn touch-interact" aria-label="Dig / interact">✦</button>
+      </div>
+
+      <!-- Track panel -->
+      <div id="track-panel" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="track-title">
+        <div class="modal-backdrop" data-close="track-panel"></div>
+        <div class="modal-card track-card">
+          <button class="modal-close" type="button" data-close="track-panel" aria-label="Close">✕</button>
+          <div class="track-disc" id="track-disc"></div>
+          <div class="track-info">
+            <span class="track-number" id="track-number">Track 1 / 8</span>
+            <h2 id="track-title">Title</h2>
+            <p class="track-desc" id="track-desc">Description</p>
+            <div class="player">
+              <button id="play-btn" class="play-btn" type="button" aria-label="Play">▶</button>
+              <span class="time" id="time-current">0:00</span>
+              <input type="range" id="seek" min="0" max="100" value="0" step="0.1" />
+              <span class="time" id="time-duration">0:00</span>
+            </div>
+            <div class="track-nav">
+              <button id="prev-track-btn" type="button">◀ Prev</button>
+              <button id="next-track-btn" type="button">Next ▶</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tracklist panel -->
+      <div id="tracklist-panel" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop" data-close="tracklist-panel"></div>
+        <div class="modal-card">
+          <button class="modal-close" type="button" data-close="tracklist-panel" aria-label="Close">✕</button>
+          <h2>Sandglass</h2>
+          <p class="modal-sub">Jump straight to a track, or go dig it up in the sand.</p>
+          <ol id="tracklist-list" class="tracklist"></ol>
+        </div>
+      </div>
+
+      <!-- About panel -->
+      <div id="about-panel" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop" data-close="about-panel"></div>
+        <div class="modal-card about-card">
+          <button class="modal-close" type="button" data-close="about-panel" aria-label="Close">✕</button>
+          <h2 id="about-name">RELLO</h2>
+          <p class="about-tagline" id="about-tagline"></p>
+          <p class="about-bio" id="about-bio"></p>
+          <div class="about-socials" id="about-socials"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
