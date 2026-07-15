@@ -11,9 +11,9 @@ tracks recorded somewhere between a crashed shuttle and a dead radio
 station, buried out here in the dunes for whoever finds them.`,
   photo: '', // optional: '/images/artist.jpg'
   socials: [
-    { label: 'Instagram', url: 'https://instagram.com/' },
-    { label: 'Spotify', url: 'https://open.spotify.com/' },
-    { label: 'Bandcamp', url: 'https://bandcamp.com/' },
+    { label: 'Instagram', url: 'https://instagram.com/relloskeme' },
+    { label: 'Spotify', url: 'https://open.spotify.com/artist/2rs6hbxe037mW4WnDzrRs2' },
+    { label: 'Bandcamp', url: 'https://bandcamp.com/relloskeme' },
     { label: 'Email', url: 'mailto:hello@example.com' },
   ],
 }
