@@ -54,14 +54,23 @@ export class Record {
     this.glowLight.position.set(0, 0, 0)
     this.object.add(this.glowLight)
 
-    this.prompt = makePromptSprite('dig ✦ E')
-    this.prompt.position.set(0, R + 1.1, 0)
-    this.object.add(this.prompt)
-    this.prompt.visible = false
+    this.digPrompt = makePromptSprite('dig ✦ E')
+    this.digPrompt.position.set(0, R + 1.1, 0)
+    this.object.add(this.digPrompt)
+    this.digPrompt.visible = false
+
+    this.replayPrompt = makePromptSprite('replay ✦ E')
+    this.replayPrompt.position.set(0, R + 1.1, 0)
+    this.object.add(this.replayPrompt)
+    this.replayPrompt.visible = false
   }
 
   get isNearInteractable() {
     return this.state === 'buried'
+  }
+
+  get canInteract() {
+    return this.state !== 'digging'
   }
 
   distanceTo(px, pz) {
@@ -112,9 +121,10 @@ export class Record {
       this.glowLight.intensity = 0
     }
 
-    this.prompt.visible = this.isNearInteractable && playerNear
-    if (this.prompt.visible) {
-      this.prompt.position.y = R + 1.1 + Math.sin(t * 3) * 0.15
-    }
+    const bobY = R + 1.1 + Math.sin(t * 3) * 0.15
+    this.digPrompt.visible = this.state === 'buried' && playerNear
+    this.replayPrompt.visible = this.state === 'unearthed' && playerNear
+    if (this.digPrompt.visible) this.digPrompt.position.y = bobY
+    if (this.replayPrompt.visible) this.replayPrompt.position.y = bobY
   }
 }

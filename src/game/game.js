@@ -7,6 +7,7 @@ import { createDecorMesh } from './world/decor.js'
 import { Player } from './entities/player.js'
 import { Record } from './entities/record.js'
 import { Campfire } from './entities/campfire.js'
+import { Vehicle } from './entities/vehicle.js'
 import { ParticleSystem } from './entities/particles.js'
 import { Input } from './input.js'
 import { Sfx } from './sfx.js'
@@ -18,6 +19,8 @@ import { AboutPanel } from './ui/aboutPanel.js'
 const RENDER_SCALE = 0.62 // internal resolution divider — chunky, PS2-ish upscale
 const CAM_DISTANCE = 6.4
 const CAM_TARGET_HEIGHT = 1.3
+const DRIVE_CAM_DISTANCE = 9.5
+const DRIVE_CAM_TARGET_HEIGHT = 2.0
 const TOUCH_TURN_SPEED = 2.0
 const MOUSE_SENSITIVITY = 0.0026
 const CAM_LERP = 8
@@ -30,6 +33,7 @@ export class Game {
     this.time = 0
     this.lastTime = 0
     this.cameraPitch = 0.32
+    this.driving = false
 
     this.layout = buildLayout(tracks.length)
     const { scene } = buildScene(this.layout.bounds)
@@ -52,6 +56,9 @@ export class Game {
 
     this.campfire = new Campfire(this.layout.campfire.x, this.layout.campfire.z)
     this.scene.add(this.campfire.object)
+
+    this.vehicle = new Vehicle(this.layout.campfire.x - 7, this.layout.campfire.z - 9)
+    this.scene.add(this.vehicle.object)
 
     this.particles = new ParticleSystem(this.scene)
 
@@ -119,9 +126,11 @@ export class Game {
   _update(dt) {
     const px = this.player.object.position.x
     const pz = this.player.object.position.z
-    const campfireNear = this.campfire.isNear(px, pz)
+    const campfireNear = !this.driving && this.campfire.isNear(px, pz)
+    const vehicleNear = !this.driving && this.vehicle.isNear(px, pz)
 
     this.campfire.update(dt, heightAt(this.campfire.x, this.campfire.z), this.time, campfireNear)
+    this.vehicle.update(dt, heightAt(this.vehicle.x, this.vehicle.z), this.time, vehicleNear, this.driving)
     this.particles.update(dt)
 
     const interactPressed = this.input.consumeInteract()
@@ -130,7 +139,7 @@ export class Game {
 
     this.records.forEach((r) => {
       const wasDigging = r.state === 'digging'
-      const near = r.isNear(px, pz)
+      const near = !this.driving && r.isNear(px, pz)
       r.update(dt, heightAt(r.x, r.z), this.time, this.particles, near)
       if (wasDigging && r.state === 'unearthed') this._onRecordUnearthed(r)
     })
@@ -138,52 +147,71 @@ export class Game {
     const { dx, dy } = this.input.consumeMouseDelta()
 
     if (!modalOpen) {
-      this.cameraYaw -= dx * MOUSE_SENSITIVITY
-      if (this.input.turnLeft) this.cameraYaw += TOUCH_TURN_SPEED * dt
-      if (this.input.turnRight) this.cameraYaw -= TOUCH_TURN_SPEED * dt
-      this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + dy * MOUSE_SENSITIVITY, PITCH_MIN, PITCH_MAX)
+      if (this.driving) {
+        this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + dy * MOUSE_SENSITIVITY, PITCH_MIN, PITCH_MAX)
+        const throttle = (this.input.forward ? 1 : 0) - (this.input.back ? 1 : 0)
+        const steer = (this.input.strafeRight ? 1 : 0) - (this.input.strafeLeft ? 1 : 0)
+        this.vehicle.drive(dt, throttle, steer)
+        this.cameraYaw = this.vehicle.facing
 
-      const fwd = { x: Math.sin(this.cameraYaw), z: Math.cos(this.cameraYaw) }
-      const right = { x: -Math.cos(this.cameraYaw), z: Math.sin(this.cameraYaw) }
-      let mx = 0
-      let mz = 0
-      if (this.input.forward) {
-        mx += fwd.x
-        mz += fwd.z
-      }
-      if (this.input.back) {
-        mx -= fwd.x
-        mz -= fwd.z
-      }
-      if (this.input.strafeRight) {
-        mx += right.x
-        mz += right.z
-      }
-      if (this.input.strafeLeft) {
-        mx -= right.x
-        mz -= right.z
-      }
-      const moveLen = Math.hypot(mx, mz)
-      if (moveLen > 0) {
-        mx /= moveLen
-        mz /= moveLen
-        this.hud.fadeHint()
-      }
+        if (interactPressed) {
+          this._exitVehicle()
+        }
+      } else {
+        this.cameraYaw -= dx * MOUSE_SENSITIVITY
+        if (this.input.turnLeft) this.cameraYaw += TOUCH_TURN_SPEED * dt
+        if (this.input.turnRight) this.cameraYaw -= TOUCH_TURN_SPEED * dt
+        this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + dy * MOUSE_SENSITIVITY, PITCH_MIN, PITCH_MAX)
 
-      const groundY = heightAt(this.player.object.position.x, this.player.object.position.z)
-      this.player.update(dt, { x: mx, z: mz }, groundY)
-      if (this.player.footstepTick()) this.sfx.footstep()
-      if (jumpPressed) this.player.jump()
+        const fwd = { x: Math.sin(this.cameraYaw), z: Math.cos(this.cameraYaw) }
+        const right = { x: -Math.cos(this.cameraYaw), z: Math.sin(this.cameraYaw) }
+        let mx = 0
+        let mz = 0
+        if (this.input.forward) {
+          mx += fwd.x
+          mz += fwd.z
+        }
+        if (this.input.back) {
+          mx -= fwd.x
+          mz -= fwd.z
+        }
+        if (this.input.strafeRight) {
+          mx += right.x
+          mz += right.z
+        }
+        if (this.input.strafeLeft) {
+          mx -= right.x
+          mz -= right.z
+        }
+        const moveLen = Math.hypot(mx, mz)
+        if (moveLen > 0) {
+          mx /= moveLen
+          mz /= moveLen
+          this.hud.fadeHint()
+        }
 
-      if (interactPressed) {
-        if (campfireNear) {
-          this.sfx.uiBlip()
-          this.aboutPanel.open()
-        } else {
-          const nearRecord = this.records.find((r) => r.isNearInteractable && r.isNear(this.player.object.position.x, this.player.object.position.z))
-          if (nearRecord) {
-            nearRecord.startDig()
-            this.sfx.dig()
+        const groundY = heightAt(this.player.object.position.x, this.player.object.position.z)
+        this.player.update(dt, { x: mx, z: mz }, groundY)
+        if (this.player.footstepTick()) this.sfx.footstep()
+        if (jumpPressed) this.player.jump()
+
+        if (interactPressed) {
+          if (vehicleNear) {
+            this._enterVehicle()
+          } else if (campfireNear) {
+            this.sfx.uiBlip()
+            this.aboutPanel.open()
+          } else {
+            const nearRecord = this.records.find((r) => r.canInteract && r.isNear(this.player.object.position.x, this.player.object.position.z))
+            if (nearRecord) {
+              if (nearRecord.state === 'buried') {
+                nearRecord.startDig()
+                this.sfx.dig()
+              } else if (nearRecord.state === 'unearthed') {
+                this.sfx.uiBlip()
+                this.trackPanel.playInBackground(nearRecord.index)
+              }
+            }
           }
         }
       }
@@ -192,22 +220,43 @@ export class Game {
     this._updateCamera(dt)
   }
 
+  _enterVehicle() {
+    this.driving = true
+    this.player.object.visible = false
+    this.cameraYaw = this.vehicle.facing
+    this.sfx.uiBlip()
+  }
+
+  _exitVehicle() {
+    this.driving = false
+    this.player.object.visible = true
+    const exitAngle = this.vehicle.facing + Math.PI / 2
+    const x = this.vehicle.x + Math.sin(exitAngle) * 2.6
+    const z = this.vehicle.z + Math.cos(exitAngle) * 2.6
+    this.player.object.position.set(x, heightAt(x, z), z)
+    this.player.facingAngle = this.vehicle.facing
+    this.cameraYaw = this.vehicle.facing
+    this.sfx.uiBlip()
+  }
+
   _updateCamera(dt) {
-    const p = this.player.object.position
+    const target = this.driving ? this.vehicle.object.position : this.player.object.position
+    const dist = this.driving ? DRIVE_CAM_DISTANCE : CAM_DISTANCE
+    const targetHeight = this.driving ? DRIVE_CAM_TARGET_HEIGHT : CAM_TARGET_HEIGHT
     const horiz = Math.cos(this.cameraPitch)
     const offset = new THREE.Vector3(
-      -Math.sin(this.cameraYaw) * horiz * CAM_DISTANCE,
-      Math.sin(this.cameraPitch) * CAM_DISTANCE + CAM_TARGET_HEIGHT,
-      -Math.cos(this.cameraYaw) * horiz * CAM_DISTANCE
+      -Math.sin(this.cameraYaw) * horiz * dist,
+      Math.sin(this.cameraPitch) * dist + targetHeight,
+      -Math.cos(this.cameraYaw) * horiz * dist
     )
-    const desired = new THREE.Vector3(p.x, p.y, p.z).add(offset)
+    const desired = new THREE.Vector3(target.x, target.y, target.z).add(offset)
     if (!this._camPos) {
       this._camPos = desired.clone()
     } else {
       this._camPos.lerp(desired, Math.min(1, CAM_LERP * dt))
     }
     this.camera.position.copy(this._camPos)
-    const lookTarget = new THREE.Vector3(p.x, p.y + CAM_TARGET_HEIGHT, p.z)
+    const lookTarget = new THREE.Vector3(target.x, target.y + targetHeight, target.z)
     if (!this._lookTarget) this._lookTarget = lookTarget.clone()
     this._lookTarget.lerp(lookTarget, Math.min(1, CAM_LERP * dt))
     this.camera.lookAt(this._lookTarget)

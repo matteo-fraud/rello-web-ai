@@ -11,6 +11,7 @@ export class TrackPanel {
   constructor({ tracks }) {
     this.tracks = tracks
     this.currentIndex = 0
+    this.hasLoadedTrack = false
     this.audio = new Audio()
     this.audio.preload = 'metadata'
 
@@ -23,6 +24,11 @@ export class TrackPanel {
     this.seekEl = document.getElementById('seek')
     this.curTimeEl = document.getElementById('time-current')
     this.durTimeEl = document.getElementById('time-duration')
+
+    this.nowPlayingEl = document.getElementById('now-playing')
+    this.nowPlayingIconEl = document.getElementById('now-playing-icon')
+    this.nowPlayingTitleEl = document.getElementById('now-playing-title')
+    this.nowPlayingEl.addEventListener('click', () => this.open(this.currentIndex, { autoplay: false }))
 
     this.playBtn.addEventListener('click', () => this.togglePlay())
     document.getElementById('prev-track-btn').addEventListener('click', () => this.step(-1))
@@ -43,14 +49,17 @@ export class TrackPanel {
     this.audio.addEventListener('play', () => {
       this.playBtn.textContent = '⏸'
       this.discEl.classList.add('playing')
+      this._syncNowPlaying()
     })
     this.audio.addEventListener('pause', () => {
       this.playBtn.textContent = '▶'
       this.discEl.classList.remove('playing')
+      this._syncNowPlaying()
     })
     this.audio.addEventListener('ended', () => {
       this.playBtn.textContent = '▶'
       this.discEl.classList.remove('playing')
+      this._syncNowPlaying()
     })
 
     document.querySelectorAll('[data-close="track-panel"]').forEach((el) =>
@@ -64,6 +73,7 @@ export class TrackPanel {
 
   _loadTrack(index) {
     this.currentIndex = index
+    this.hasLoadedTrack = true
     const track = this.tracks[index]
     this.discEl.style.setProperty('--disc-color', track.color)
     this.numberEl.textContent = `Track ${index + 1} / ${this.tracks.length} · ${album.title}`
@@ -72,6 +82,7 @@ export class TrackPanel {
     this.durTimeEl.textContent = track.duration
     this.seekEl.value = 0
     this.curTimeEl.textContent = '0:00'
+    this.nowPlayingTitleEl.textContent = track.title
 
     if (this.audio.src !== new URL(track.src, window.location.href).href) {
       this.audio.src = track.src
@@ -79,10 +90,20 @@ export class TrackPanel {
     this.audio.currentTime = 0
   }
 
+  // Reflects current playback state in the persistent "now playing" pill,
+  // and only shows it once a track has actually been loaded, and while the
+  // full panel isn't already open (would be redundant).
+  _syncNowPlaying() {
+    this.nowPlayingIconEl.textContent = this.audio.paused ? '▶' : '⏸'
+    const shouldShow = this.hasLoadedTrack && !this.isOpen
+    this.nowPlayingEl.classList.toggle('hidden', !shouldShow)
+  }
+
   // Opens the full player panel (used from the tracklist, or Prev/Next).
   open(index, { autoplay = true } = {}) {
     this._loadTrack(index)
     this.panel.classList.remove('hidden')
+    this._syncNowPlaying()
     if (autoplay) {
       this.audio.play().catch(() => {})
     }
@@ -93,6 +114,7 @@ export class TrackPanel {
   playInBackground(index) {
     this._loadTrack(index)
     this.audio.play().catch(() => {})
+    this._syncNowPlaying()
   }
 
   step(delta) {
@@ -105,8 +127,10 @@ export class TrackPanel {
     else this.audio.pause()
   }
 
+  // Closing the panel does NOT stop playback — the song keeps going in the
+  // background, and the "now playing" pill reappears so it can be reopened.
   close() {
-    this.audio.pause()
     this.panel.classList.add('hidden')
+    this._syncNowPlaying()
   }
 }

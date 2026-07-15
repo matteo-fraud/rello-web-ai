@@ -192,6 +192,40 @@ body {
   transform: scale(0.95);
 }
 
+/* ---------- Now playing indicator ---------- */
+#now-playing {
+  position: absolute;
+  top: 0.9rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--cream);
+  background: rgba(16, 12, 34, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem 0.4rem 0.7rem;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  max-width: min(70vw, 320px);
+}
+#now-playing:hover {
+  background: rgba(40, 30, 70, 0.75);
+}
+#now-playing-icon {
+  color: var(--gold);
+  flex: none;
+}
+#now-playing-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- Bottom control hint ---------- */
 #controls-hint {
   position: absolute;
