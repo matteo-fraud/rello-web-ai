@@ -34,6 +34,8 @@ export class Record {
 
     const disc = new THREE.Mesh(discGeo, rimMat)
     disc.rotation.x = Math.PI / 2
+    disc.castShadow = true
+    disc.receiveShadow = true
     this.object.add(disc)
     this.discMesh = disc
 

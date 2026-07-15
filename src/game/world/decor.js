@@ -53,5 +53,11 @@ export function createDecorMesh(item) {
   group.position.z = item.z
   group.rotation.y = item.rotation
   group.scale.multiplyScalar(item.scale)
+  group.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true
+      child.receiveShadow = true
+    }
+  })
   return group
 }

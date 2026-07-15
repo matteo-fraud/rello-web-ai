@@ -15,17 +15,33 @@ export function buildScene(bounds) {
   scene.background = new THREE.Color(SKY_TOP)
   scene.fog = new THREE.FogExp2(FOG_COLOR, 0.012)
 
-  const hemi = new THREE.HemisphereLight(0x8fa0ff, 0x3a2a1a, 1.1)
+  const hemi = new THREE.HemisphereLight(0x8fa0ff, 0x3a2a1a, 0.45)
   scene.add(hemi)
-  const moonLight = new THREE.DirectionalLight(0xbfd0ff, 1.2)
-  moonLight.position.set(-40, 60, -20)
+
+  // Low, grazing angle (roughly perpendicular to the dune ridge direction)
+  // so windward/leeward faces read with real contrast, like raking desert
+  // light — a light straight overhead makes dunes look completely flat.
+  const moonLight = new THREE.DirectionalLight(0xcfe0ff, 2.3)
+  moonLight.position.set(-52, 22, 145)
+  moonLight.castShadow = true
+  moonLight.shadow.mapSize.set(2048, 2048)
+  const shadowSpan = Math.min(bounds * 1.1, 160)
+  moonLight.shadow.camera.left = -shadowSpan
+  moonLight.shadow.camera.right = shadowSpan
+  moonLight.shadow.camera.top = shadowSpan
+  moonLight.shadow.camera.bottom = -shadowSpan
+  moonLight.shadow.camera.near = 10
+  moonLight.shadow.camera.far = 260
+  moonLight.shadow.bias = -0.0015
   scene.add(moonLight)
-  const fillLight = new THREE.DirectionalLight(0xff9a6a, 0.35)
+  scene.add(moonLight.target)
+
+  const fillLight = new THREE.DirectionalLight(0xff9a6a, 0.5)
   fillLight.position.set(30, 20, 40)
   scene.add(fillLight)
 
-  const groundSize = bounds * 2.4
-  const segments = 90
+  const groundSize = bounds * 2.2
+  const segments = 170
   const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize, segments, segments)
   groundGeo.rotateX(-Math.PI / 2)
   const pos = groundGeo.attributes.position
@@ -35,14 +51,17 @@ export function buildScene(bounds) {
     pos.setY(i, terrainHeight(x, z))
   }
   groundGeo.computeVertexNormals()
+  const sandTexture = buildSandTexture()
+  const tileRepeat = groundSize / 9
+  sandTexture.repeat.set(tileRepeat, tileRepeat)
   const groundMat = new THREE.MeshStandardMaterial({
-    color: SAND_COLOR,
+    map: sandTexture,
     flatShading: true,
     roughness: 1,
     metalness: 0,
   })
   const ground = new THREE.Mesh(groundGeo, groundMat)
-  ground.receiveShadow = false
+  ground.receiveShadow = true
   scene.add(ground)
 
   scene.add(buildSkyDome())
@@ -52,6 +71,46 @@ export function buildScene(bounds) {
   scene.add(buildRingedPlanet(220, 40, -340, 46))
 
   return { scene, ground, hemi, moonLight }
+}
+
+// A tileable grainy sand texture, generated on a canvas — gives the dunes
+// visible texture/grain instead of a flat vertex color.
+function buildSandTexture() {
+  const size = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const base = new THREE.Color(SAND_COLOR)
+  ctx.fillStyle = `rgb(${base.r * 255}, ${base.g * 255}, ${base.b * 255})`
+  ctx.fillRect(0, 0, size, size)
+
+  const image = ctx.getImageData(0, 0, size, size)
+  const data = image.data
+  for (let i = 0; i < data.length; i += 4) {
+    const grain = (Math.random() - 0.5) * 34
+    data[i] = THREE.MathUtils.clamp(data[i] + grain, 0, 255)
+    data[i + 1] = THREE.MathUtils.clamp(data[i + 1] + grain * 0.9, 0, 255)
+    data[i + 2] = THREE.MathUtils.clamp(data[i + 2] + grain * 0.7, 0, 255)
+  }
+  ctx.putImageData(image, 0, 0)
+
+  // scattered darker pebbles/speckles for a bit more variation at a glance
+  for (let i = 0; i < 260; i++) {
+    const x = Math.random() * size
+    const y = Math.random() * size
+    const r = 0.5 + Math.random() * 1.6
+    ctx.fillStyle = `rgba(60, 40, 20, ${0.15 + Math.random() * 0.2})`
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.RepeatWrapping
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
 }
 
 function buildSkyDome() {

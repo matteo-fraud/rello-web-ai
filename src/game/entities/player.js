@@ -160,7 +160,12 @@ export class Player {
       leg.children[0].add(boot)
     })
 
-    this.object.castShadow = false
+    this.object.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = false
+      }
+    })
   }
 
   get position() {

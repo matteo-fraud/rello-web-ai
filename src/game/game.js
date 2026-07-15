@@ -6,7 +6,7 @@ import { buildScene, heightAt } from './world/scene.js'
 import { createDecorMesh } from './world/decor.js'
 import { Player } from './entities/player.js'
 import { Record } from './entities/record.js'
-import { Beacon } from './entities/beacon.js'
+import { Campfire } from './entities/campfire.js'
 import { ParticleSystem } from './entities/particles.js'
 import { Input } from './input.js'
 import { Sfx } from './sfx.js'
@@ -16,25 +16,29 @@ import { TracklistPanel } from './ui/tracklistPanel.js'
 import { AboutPanel } from './ui/aboutPanel.js'
 
 const RENDER_SCALE = 0.62 // internal resolution divider — chunky, PS2-ish upscale
-const CAM_DISTANCE = 6.2
-const CAM_HEIGHT = 3.4
-const TURN_SPEED = 2.0
-const CAM_LERP = 6
+const CAM_DISTANCE = 6.4
+const CAM_TARGET_HEIGHT = 1.3
+const TOUCH_TURN_SPEED = 2.0
+const MOUSE_SENSITIVITY = 0.0026
+const CAM_LERP = 8
+const PITCH_MIN = -0.15
+const PITCH_MAX = 1.05
 
 export class Game {
   constructor(canvas) {
     this.canvas = canvas
     this.time = 0
     this.lastTime = 0
+    this.cameraPitch = 0.32
 
     this.layout = buildLayout(tracks.length)
     const { scene } = buildScene(this.layout.bounds)
     this.scene = scene
 
-    this.decor = buildDecor(this.layout.bounds, [this.layout.beacon, ...this.layout.recordPositions])
+    this.decor = buildDecor(this.layout.bounds, [this.layout.campfire, ...this.layout.recordPositions])
     this.decor.forEach((item) => this.scene.add(createDecorMesh(item)))
 
-    const startPos = { x: this.layout.beacon.x + 4, z: this.layout.beacon.z - 6 }
+    const startPos = { x: this.layout.campfire.x + 4, z: this.layout.campfire.z - 6 }
     const firstRecord = this.layout.recordPositions[0]
     this.cameraYaw = Math.atan2(firstRecord.x - startPos.x, firstRecord.z - startPos.z)
 
@@ -46,8 +50,8 @@ export class Game {
     this.records = this.layout.recordPositions.map((p, i) => new Record(p.x, p.z, tracks[i], i))
     this.records.forEach((r) => this.scene.add(r.object))
 
-    this.beacon = new Beacon(this.layout.beacon.x, this.layout.beacon.z)
-    this.scene.add(this.beacon.object)
+    this.campfire = new Campfire(this.layout.campfire.x, this.layout.campfire.z)
+    this.scene.add(this.campfire.object)
 
     this.particles = new ParticleSystem(this.scene)
 
@@ -55,8 +59,10 @@ export class Game {
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(1)
+    this.renderer.shadowMap.enabled = true
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
-    this.input = new Input()
+    this.input = new Input(canvas)
     this.sfx = new Sfx()
 
     this.trackPanel = new TrackPanel({ tracks })
@@ -113,9 +119,9 @@ export class Game {
   _update(dt) {
     const px = this.player.object.position.x
     const pz = this.player.object.position.z
-    const beaconNear = this.beacon.isNear(px, pz)
+    const campfireNear = this.campfire.isNear(px, pz)
 
-    this.beacon.update(dt, heightAt(this.beacon.x, this.beacon.z), this.time, beaconNear)
+    this.campfire.update(dt, heightAt(this.campfire.x, this.campfire.z), this.time, campfireNear)
     this.particles.update(dt)
 
     const interactPressed = this.input.consumeInteract()
@@ -128,11 +134,16 @@ export class Game {
       if (wasDigging && r.state === 'unearthed') this._onRecordUnearthed(r)
     })
 
+    const { dx, dy } = this.input.consumeMouseDelta()
+
     if (!modalOpen) {
-      if (this.input.left) this.cameraYaw += TURN_SPEED * dt
-      if (this.input.right) this.cameraYaw -= TURN_SPEED * dt
+      this.cameraYaw -= dx * MOUSE_SENSITIVITY
+      if (this.input.turnLeft) this.cameraYaw += TOUCH_TURN_SPEED * dt
+      if (this.input.turnRight) this.cameraYaw -= TOUCH_TURN_SPEED * dt
+      this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + dy * MOUSE_SENSITIVITY, PITCH_MIN, PITCH_MAX)
 
       const fwd = { x: Math.sin(this.cameraYaw), z: Math.cos(this.cameraYaw) }
+      const right = { x: Math.cos(this.cameraYaw), z: -Math.sin(this.cameraYaw) }
       let mx = 0
       let mz = 0
       if (this.input.forward) {
@@ -143,15 +154,27 @@ export class Game {
         mx -= fwd.x
         mz -= fwd.z
       }
-      const moving = mx !== 0 || mz !== 0
-      if (moving) this.hud.fadeHint()
+      if (this.input.strafeRight) {
+        mx += right.x
+        mz += right.z
+      }
+      if (this.input.strafeLeft) {
+        mx -= right.x
+        mz -= right.z
+      }
+      const moveLen = Math.hypot(mx, mz)
+      if (moveLen > 0) {
+        mx /= moveLen
+        mz /= moveLen
+        this.hud.fadeHint()
+      }
 
       const groundY = heightAt(this.player.object.position.x, this.player.object.position.z)
       this.player.update(dt, { x: mx, z: mz }, groundY)
       if (this.player.footstepTick()) this.sfx.footstep()
 
       if (interactPressed) {
-        if (beaconNear) {
+        if (campfireNear) {
           this.sfx.uiBlip()
           this.aboutPanel.open()
         } else {
@@ -169,15 +192,20 @@ export class Game {
 
   _updateCamera(dt) {
     const p = this.player.object.position
-    const back = { x: -Math.sin(this.cameraYaw), z: -Math.cos(this.cameraYaw) }
-    const desired = new THREE.Vector3(p.x + back.x * CAM_DISTANCE, p.y + CAM_HEIGHT, p.z + back.z * CAM_DISTANCE)
+    const horiz = Math.cos(this.cameraPitch)
+    const offset = new THREE.Vector3(
+      -Math.sin(this.cameraYaw) * horiz * CAM_DISTANCE,
+      Math.sin(this.cameraPitch) * CAM_DISTANCE + CAM_TARGET_HEIGHT,
+      -Math.cos(this.cameraYaw) * horiz * CAM_DISTANCE
+    )
+    const desired = new THREE.Vector3(p.x, p.y, p.z).add(offset)
     if (!this._camPos) {
       this._camPos = desired.clone()
     } else {
       this._camPos.lerp(desired, Math.min(1, CAM_LERP * dt))
     }
     this.camera.position.copy(this._camPos)
-    const lookTarget = new THREE.Vector3(p.x, p.y + 1.1, p.z)
+    const lookTarget = new THREE.Vector3(p.x, p.y + CAM_TARGET_HEIGHT, p.z)
     if (!this._lookTarget) this._lookTarget = lookTarget.clone()
     this._lookTarget.lerp(lookTarget, Math.min(1, CAM_LERP * dt))
     this.camera.lookAt(this._lookTarget)

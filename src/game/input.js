@@ -1,23 +1,32 @@
 const FORWARD_KEYS = new Set(['ArrowUp', 'KeyW'])
 const BACK_KEYS = new Set(['ArrowDown', 'KeyS'])
-const LEFT_KEYS = new Set(['ArrowLeft', 'KeyA'])
-const RIGHT_KEYS = new Set(['ArrowRight', 'KeyD'])
+const STRAFE_LEFT_KEYS = new Set(['ArrowLeft', 'KeyA'])
+const STRAFE_RIGHT_KEYS = new Set(['ArrowRight', 'KeyD'])
 const INTERACT_KEYS = new Set(['KeyE', 'Space', 'Enter'])
 
+// Desktop: WASD moves relative to the camera, the mouse looks around
+// (pointer-lock), like a console third-person game. Touch has no mouse, so
+// it keeps a simple turn-left/forward/turn-right dpad instead.
 export class Input {
-  constructor() {
+  constructor(canvas) {
+    this.canvas = canvas
     this.forward = false
     this.back = false
-    this.left = false
-    this.right = false
+    this.strafeLeft = false
+    this.strafeRight = false
+    this.turnLeft = false // touch-only
+    this.turnRight = false // touch-only
     this.interactPressed = false // edge-triggered, consumed by Game each frame
     this.anyInputThisSession = false
+    this.mouseDX = 0
+    this.mouseDY = 0
+    this.pointerLocked = false
 
     this._onKeyDown = (e) => {
       if (FORWARD_KEYS.has(e.code)) this.forward = true
       if (BACK_KEYS.has(e.code)) this.back = true
-      if (LEFT_KEYS.has(e.code)) this.left = true
-      if (RIGHT_KEYS.has(e.code)) this.right = true
+      if (STRAFE_LEFT_KEYS.has(e.code)) this.strafeLeft = true
+      if (STRAFE_RIGHT_KEYS.has(e.code)) this.strafeRight = true
       if (INTERACT_KEYS.has(e.code)) {
         if (!e.repeat) this.interactPressed = true
         e.preventDefault()
@@ -27,16 +36,16 @@ export class Input {
     this._onKeyUp = (e) => {
       if (FORWARD_KEYS.has(e.code)) this.forward = false
       if (BACK_KEYS.has(e.code)) this.back = false
-      if (LEFT_KEYS.has(e.code)) this.left = false
-      if (RIGHT_KEYS.has(e.code)) this.right = false
+      if (STRAFE_LEFT_KEYS.has(e.code)) this.strafeLeft = false
+      if (STRAFE_RIGHT_KEYS.has(e.code)) this.strafeRight = false
     }
 
     window.addEventListener('keydown', this._onKeyDown)
     window.addEventListener('keyup', this._onKeyUp)
 
     this._bindTouchButton('touch-forward', 'forward')
-    this._bindTouchButton('touch-left', 'left')
-    this._bindTouchButton('touch-right', 'right')
+    this._bindTouchButton('touch-left', 'turnLeft')
+    this._bindTouchButton('touch-right', 'turnRight')
     const interactBtn = document.getElementById('touch-interact')
     if (interactBtn) {
       const fire = (e) => {
@@ -45,6 +54,21 @@ export class Input {
         this.anyInputThisSession = true
       }
       interactBtn.addEventListener('pointerdown', fire)
+    }
+
+    if (canvas) {
+      canvas.addEventListener('click', () => {
+        if (document.pointerLockElement !== canvas) canvas.requestPointerLock()
+      })
+      document.addEventListener('pointerlockchange', () => {
+        this.pointerLocked = document.pointerLockElement === canvas
+      })
+      document.addEventListener('mousemove', (e) => {
+        if (document.pointerLockElement !== canvas) return
+        this.mouseDX += e.movementX || 0
+        this.mouseDY += e.movementY || 0
+        this.anyInputThisSession = true
+      })
     }
   }
 
@@ -71,5 +95,14 @@ export class Input {
     const was = this.interactPressed
     this.interactPressed = false
     return was
+  }
+
+  // Call once per frame; returns accumulated mouse movement since the last call.
+  consumeMouseDelta() {
+    const dx = this.mouseDX
+    const dy = this.mouseDY
+    this.mouseDX = 0
+    this.mouseDY = 0
+    return { dx, dy }
   }
 }

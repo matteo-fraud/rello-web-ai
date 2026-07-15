@@ -28,19 +28,42 @@ function valueNoise(x, z) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v
 }
 
-export function terrainHeight(x, z) {
-  const large = valueNoise(x * 0.012, z * 0.012) * 2.8
-  const mid = valueNoise(x * 0.04 + 50, z * 0.04 + 50) * 0.9
-  const small = valueNoise(x * 0.15 + 100, z * 0.15 + 100) * 0.22
-  return large + mid + small
+// Sweeping, wind-aligned dune ridges (like a real dune field): a dominant
+// ridge direction with an asymmetric profile (long gentle windward slope,
+// short steep leeward slip-face) instead of a plain symmetric sine, warped
+// so the ridges meander instead of running in perfectly straight lines.
+const DUNE_DIR = 0.35
+const DUNE_COS = Math.cos(DUNE_DIR)
+const DUNE_SIN = Math.sin(DUNE_DIR)
+
+// t in [0,1) -> asymmetric ridge profile in [0,1]: slow rise, fast fall.
+function duneProfile(t) {
+  return t < 0.72 ? Math.pow(t / 0.72, 1.6) : 1 - Math.pow((t - 0.72) / 0.28, 0.7)
 }
 
-const BEACON_POS = { x: 0, z: 0 }
+function ridgeLayer(dc, warp, freq, amplitude, phaseOffset) {
+  const phase = (dc + warp) * freq + phaseOffset
+  const t = phase / (Math.PI * 2) - Math.floor(phase / (Math.PI * 2))
+  return (duneProfile(t) - 0.42) * amplitude
+}
+
+export function terrainHeight(x, z) {
+  const dc = x * DUNE_COS + z * DUNE_SIN // across the ridges
+  const cc = -x * DUNE_SIN + z * DUNE_COS // along the ridges
+  const warp = valueNoise(cc * 0.015, dc * 0.015) * 14
+  const bigDunes = ridgeLayer(dc, warp, 0.085, 4.4, 0)
+  const smallDunes = ridgeLayer(dc, warp * 1.4, 0.22, 1.5, 2.1)
+  const rolling = valueNoise(x * 0.01, z * 0.01) * 1.6
+  const ripple = valueNoise(x * 0.2 + 100, z * 0.2 + 100) * 0.12
+  return bigDunes + smallDunes + rolling + ripple
+}
+
+const CAMPFIRE_POS = { x: 0, z: 0 }
 const RECORD_SPACING_MIN = 16
 const RECORD_SPACING_MAX = 24
 const FIRST_RECORD_DIST = 20
 
-// Scatters records outward from the beacon along a gentle winding path so
+// Scatters records outward from the campfire along a gentle winding path so
 // the player naturally discovers them while exploring, rather than in a
 // straight line.
 export function buildLayout(trackCount) {
@@ -49,14 +72,14 @@ export function buildLayout(trackCount) {
   let dist = FIRST_RECORD_DIST
   for (let i = 0; i < trackCount; i++) {
     positions.push({
-      x: BEACON_POS.x + Math.cos(angle) * dist,
-      z: BEACON_POS.z + Math.sin(angle) * dist,
+      x: CAMPFIRE_POS.x + Math.cos(angle) * dist,
+      z: CAMPFIRE_POS.z + Math.sin(angle) * dist,
     })
     angle += 0.75 + hash(i * 3.1) * 0.5
     dist += RECORD_SPACING_MIN + hash(i * 7.31 + 2) * (RECORD_SPACING_MAX - RECORD_SPACING_MIN)
   }
   const bounds = dist + 20
-  return { beacon: BEACON_POS, recordPositions: positions, bounds }
+  return { campfire: CAMPFIRE_POS, recordPositions: positions, bounds }
 }
 
 export function buildDecor(bounds, avoidPoints, seedOffset = 0) {
