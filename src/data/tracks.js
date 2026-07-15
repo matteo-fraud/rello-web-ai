@@ -18,6 +18,13 @@ export const album = {
 
 export const tracks = [
   {
+    title: 'Moonlight',
+    duration: '2:20',
+    src: '/audio/moonlight.mp3',
+    color: '#fbff2a',
+    description: 'COSMIC AFROBOOST',
+  },
+  {
     title: 'Mirage',
     duration: '3:12',
     src: '/audio/track-01.wav',
